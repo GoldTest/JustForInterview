@@ -1,50 +1,136 @@
 package org.example.project
 
 import android.util.Log
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class MyViewModel(private val apiClient: ApiClient) : ViewModel() {
+    val loading = mutableStateOf(LoadingState.IDLE)
 
 
-    //extract models
-    private val _models = MutableStateFlow(emptyList<String>())
-    val models: StateFlow<List<String>> = _models
+    private val _models = MutableStateFlow(emptyList<Coin>())
+    val models: StateFlow<List<Coin>> = _models
 
-    private val _sorted = MutableStateFlow(Array<String>(0) { "" })
-    val sortedFileNames: StateFlow<Array<String>> = _sorted
+    private val _balances = MutableStateFlow(emptyList<BalanceItem>())
+    val balances: StateFlow<List<BalanceItem>> = _balances
 
-    //this maybe suspend, not consider result seal for now
-    fun fetchModels() {
+    private val _rates = MutableStateFlow(emptyList<Tier>())
+    val rates: StateFlow<List<Tier>> = _rates
+
+    val allUsdCash: StateFlow<String> = combine(balances, rates) { balances, rates ->
+        calculateAllUsdCash(balances, rates)
+    }.stateIn(
+        viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000L),
+        initialValue = "0.0"
+    )
+
+    private fun calculateAllUsdCash(balances: List<BalanceItem>, rates: List<Tier>): String {
+        val usdCash = balances.sumOf { balance ->
+            println("asdasd" + balance)
+            balance.amount
+//            rates.firstOrNull { it.from_currency == balance.currency }?.let {
+//                balance.amount * (it.rates.firstOrNull()?.rate?.toDouble() ?: 0.0)
+//            } ?: 0.0
+        }
+        return String.format("%.2f", usdCash)
+    }
+
+
+    fun fetchModelIntent() {
+        loading.value = LoadingState.LOADING
         viewModelScope.launch {
             apiClient
-                .fetchModels()
+                .fetchCoins()
                 .flowOn(Dispatchers.IO)
                 .catch {
-                    Log.e("MainViewModel", "Failed to get list of car models.")
+                    Log.e("MainViewModel", "Failed to get list of models.")
                 }
-                .collect { _models.value = it }
+                .collect { response ->
+                    when (response) {
+                        is ApiError -> {
+                            loading.value = LoadingState.ERROR
+                            //response.message
+                        }
+
+                        is Response -> {
+                            loading.value = LoadingState.IDLE
+                            _models.value = response.currencies
+                        }
+
+                        else -> {
+                        }
+                    }
+                }
         }
     }
 
+    fun fetchWalletIntent() {
+        loading.value = LoadingState.LOADING
+        viewModelScope.launch {
+            apiClient
+                .fetchBalance()
+                .flowOn(Dispatchers.IO)
+                .catch { e ->
+                    Log.e("MainViewModel", "Failed to get list of models." + e)
+                }
+                .collect { response ->
+                    when (response) {
+                        is ApiError -> {
+                            loading.value = LoadingState.ERROR
+                            //response.message
+                            print("error!!!" + response)
+                        }
 
-    // 提取字符串中的数字部分
-    fun String.extractNumber(): Int {
-        val numberRegex = Regex("\\d+")
-        val matchResult = numberRegex.find(this)
-        return matchResult?.value?.toInt() ?: 0
+                        is WalletResponse -> {
+                            loading.value = LoadingState.IDLE
+
+                            _balances.value = response.wallet
+                            println(_balances.toString() + "gggggas")
+                        }
+
+                        else -> {}
+                    }
+                }
+        }
     }
 
-    fun sort(fileNames: Array<String>) {
-        _sorted.value = fileNames.sortedWith(compareBy(
-            { it.extractNumber() }, //先按数字顺序排列
-            { it } //数字相同的，整体排列
-        )).toTypedArray()
+    fun fetchRatesIntent() {
+        loading.value = LoadingState.LOADING
+        viewModelScope.launch {
+            apiClient
+                .fetchRates()
+                .flowOn(Dispatchers.IO)
+                .catch {
+                    Log.e("MainViewModel", "Failed to get list of models.")
+                }
+                .collect { response ->
+                    when (response) {
+                        is ApiError -> {
+                            loading.value = LoadingState.ERROR
+                            //response.message
+                            print("error!!!" + response)
+                        }
+
+                        is LiveRates -> {
+                            loading.value = LoadingState.IDLE
+                            _rates.value = response.tiers
+
+                            //every time change wash again
+                        }
+
+                        else -> {}
+                    }
+                }
+        }
+    }
+
+    //union or split dont care
+    fun washData() {
+
     }
 }
