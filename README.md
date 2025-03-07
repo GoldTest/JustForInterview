@@ -6,5 +6,4 @@ This is a Kotlin Multiplatform project targeting Android, iOS, Web, Desktop, Ser
 
 
   Run ComposeApp on Android and here we go:
-
-![img_1.png](img_1.png)
+![img.png](img.png)
