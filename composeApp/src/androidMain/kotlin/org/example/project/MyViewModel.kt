@@ -31,11 +31,9 @@ class MyViewModel(private val apiClient: ApiClient) : ViewModel() {
 
     private fun calculateAllUsdCash(balances: List<BalanceItem>, rates: List<Tier>): String {
         val usdCash = balances.sumOf { balance ->
-            println("asdasd" + balance)
-            balance.amount
-//            rates.firstOrNull { it.from_currency == balance.currency }?.let {
-//                balance.amount * (it.rates.firstOrNull()?.rate?.toDouble() ?: 0.0)
-//            } ?: 0.0
+            rates.firstOrNull { it.from_currency == balance.currency }?.let {
+                balance.amount * (it.rates.firstOrNull()?.rate?.toDouble() ?: 0.0)
+            } ?: 0.0
         }
         return String.format("%.2f", usdCash)
     }
